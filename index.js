@@ -16,7 +16,7 @@ const redisClient = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-redisClient.on("error", (err) => console.error("Redis error:", err));
+
 
 // Connect Redis (wrap in async function)
 redisClient.ping().then(() => {
