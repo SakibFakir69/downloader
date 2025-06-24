@@ -8,7 +8,8 @@ const app = express();
 const port = process.env.PORT || 5000;
 const { limiter } = require('./middleware/limitter');
 const ytdlp = require('yt-dlp-exec');
-import { exec } from 'child_process';
+const { exec } = require('child_process');
+
 
 
 const { Redis } = require("@upstash/redis");
