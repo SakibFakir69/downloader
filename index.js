@@ -8,6 +8,8 @@ const helmet = require("helmet");
 const app = express();
 const port = process.env.PORT || 5000;
 const { limiter } = require('./middleware/limitter');
+const ytdlp = require('yt-dlp-exec');
+
 
 const { Redis } = require("@upstash/redis");
 
@@ -26,7 +28,7 @@ redisClient.ping().then(() => {
 
 
 // middleware
-app.use(limiter); 
+app.use(limiter);
 app.use(express.json());
 app.use(helmet());
 
@@ -73,23 +75,44 @@ app.get('/download', async (req, res) => {
 
 
     // Run the yt-dlp command
-    exec(cmd, async (err, stdout, stderr) => {
-      if (err) {
-        console.error("❌ Download error:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Download failed",
-          error: stderr,
-        });
-      }
+    // exec(cmd, async (err, stdout, stderr) => {
+    //   if (err) {
+    //     console.error("❌ Download error:", err);
+    //     return res.status(500).json({
+    //       success: false,
+    //       message: "Download failed",
+    //       error: stderr,
+    //     });
+    //   }
 
-      console.log("✅ Download complete:\n", stdout);
+    //   console.log("✅ Download complete:\n", stdout);
 
-      // Set Redis cache for this URL (24 hours)
-      await redisClient.set(cacheKey, "downloaded", { EX: 60 * 60 * 24 });
+    //   // Set Redis cache for this URL (24 hours)
+    //   await redisClient.set(cacheKey, "downloaded", { EX: 60 * 60 * 24 });
+
+    //   res.status(200).json({ success: true, message: "Download completed" });
+    // });
+
+
+    ytdlp(url, {
+      output: `${downloadDir}/%(title)s.%(ext)s`,
+      format: 'best',
+    }).then(async () => {
+      console.log("✅ Download complete");
+
+      // Cache result
+      await redisClient.set(cacheKey, "downloaded", { ex: 60 * 60 * 24 });
 
       res.status(200).json({ success: true, message: "Download completed" });
+    }).catch(err => {
+      console.error("❌ Download error:", err);
+      res.status(500).json({
+        success: false,
+        message: "Download failed",
+        error: err.message,
+      });
     });
+
 
   } catch (err) {
     console.error("❌ Server error:", err);
