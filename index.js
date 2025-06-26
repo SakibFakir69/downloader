@@ -60,8 +60,10 @@ app.get('/download', async (req, res) => {
 
     const outputTemplate = path.join(downloadDir, '%(title)s.%(ext)s');
 
-    // Run yt-dlp CLI directly to get downloaded filename
-    const { stdout, stderr } = await execFilePromise('yt-dlp', [
+    // Use full path to yt-dlp binary
+    const ytDlpPath = '/usr/local/bin/yt-dlp';
+
+    const { stdout, stderr } = await execFilePromise(ytDlpPath, [
       url,
       '-o', outputTemplate,
       '--print', 'filename',
