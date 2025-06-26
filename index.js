@@ -3,25 +3,20 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
-const { execFile } = require('child_process');
-const util = require('util');
-const execFilePromise = util.promisify(execFile);
+const { downloadTikTokVideo } = require('easytiktokdl');
 const { Redis } = require('@upstash/redis');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Initialize Redis client
+// Initialize Redis client (same as before)
 const redisClient = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-// Test Redis connection
 redisClient.ping()
-  .then(() => {
-    console.log('✅ Connected to Upstash Redis');
-  })
+  .then(() => console.log('✅ Connected to Upstash Redis'))
   .catch(err => {
     console.error('❌ Redis connection error:', err);
     process.exit(1);
@@ -40,13 +35,8 @@ app.get('/download', async (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ success: false, message: 'URL is required' });
 
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return res.status(400).json({ success: false, message: 'Invalid URL format' });
-    }
-
+    // Basic URL validation (add your own logic)
+    const parsedUrl = new URL(url);
     if (!parsedUrl.hostname.includes('tiktok.com')) {
       return res.status(400).json({ success: false, message: 'Only TikTok URLs are allowed' });
     }
@@ -58,31 +48,18 @@ app.get('/download', async (req, res) => {
       return res.status(200).json({ success: true, message: 'Download served from cache' });
     }
 
-    const outputTemplate = path.join(downloadDir, '%(title)s.%(ext)s');
+    const outputPath = path.join(downloadDir, `${Date.now()}.mp4`);
 
-    // Use full path to yt-dlp binary
-    const ytDlpPath = '/usr/local/bin/yt-dlp';
-
-    const { stdout, stderr } = await execFilePromise(ytDlpPath, [
-      url,
-      '-o', outputTemplate,
-      '--print', 'filename',
-      '--format', 'best',
-      '--no-warnings',
-      '--no-call-home',
-      '--no-check-certificate',
-      '--prefer-free-formats',
-    ]);
-
-    const downloadedFilePath = stdout.trim();
-    console.log('✅ Download complete:', downloadedFilePath);
+    // Use easytiktokdl to download video
+    const videoPath = await downloadTikTokVideo(url, outputPath);
+    console.log('✅ Download complete:', videoPath);
 
     await redisClient.set(cacheKey, 'downloaded', { ex: 60 * 60 * 24 });
 
     res.status(200).json({
       success: true,
       message: 'Download completed',
-      filename: path.basename(downloadedFilePath),
+      filename: path.basename(videoPath),
     });
 
   } catch (err) {
@@ -90,27 +67,11 @@ app.get('/download', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Download failed',
-      error: err.stderr || err.message,
+      error: err.message,
     });
   }
 });
 
-app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    message: 'TikTok Downloader Backend is running',
-    timestamp: new Date().toISOString(),
-  });
-});
-
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
-});
-
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled rejection:', err);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught exception:', err);
 });
